@@ -1,39 +1,49 @@
 import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
 
-class Handler implements URLHandler {
-    // The one bit of state on the server: a number that will be manipulated by
-    // various requests.
-    int num = 0;
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+
+class ChatHandler implements URLHandler {
+    private StringBuilder chatHistory = new StringBuilder();
 
     public String handleRequest(URI url) {
-        if (url.getPath().equals("/")) {
-            return String.format("Number: %d", num);
-        } else if (url.getPath().equals("/increment")) {
-            num += 1;
-            return String.format("Number incremented!");
-        } else {
-            if (url.getPath().contains("/add")) {
-                String[] parameters = url.getQuery().split("=");
-                if (parameters[0].equals("count")) {
-                    num += Integer.parseInt(parameters[1]);
-                    return String.format("Number increased by %s! It's now %d", parameters[1], num);
-                }
+        if ("/add-message".equals(url.getPath())) {
+            Map<String, String> params = queryToMap(url.getQuery());
+            String user = params.get("user");
+            String message = params.get("s");
+            if (user != null && message != null) {
+                chatHistory.append(user).append(": ").append(message).append("\n");
+                return chatHistory.toString();
             }
-            return "404 Not Found!";
+            return "Invalid request";
         }
+        return "404 Not Found!";
+    }
+
+    private Map<String, String> queryToMap(String query) {
+        Map<String, String> result = new HashMap<>();
+        for (String param : query.split("&")) {
+            String[] entry = param.split("=");
+            if (entry.length > 1) {
+                result.put(entry[0], entry[1].replace("+", " "));
+            }
+        }
+        return result;
     }
 }
 
-class ChatServer {
+public class ChatServer {
     public static void main(String[] args) throws IOException {
-        if(args.length == 0){
-            System.out.println("Missing port number! Try any number between 1024 to 49151");
-            return;
-        }
-
-        int port = Integer.parseInt(args[0]);
-
-        Server.start(port, new Handler());
+        int port = args.length > 0 ? Integer.parseInt(args[0]) : 8080;
+        HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
+        server.createContext("/", new ServerHttpHandler(new ChatHandler()));
+        server.start();
+        System.out.println("Server started on port " + port);
     }
 }
